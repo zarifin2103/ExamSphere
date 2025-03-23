@@ -44,76 +44,48 @@ interface QuestionFormValues {
 const QuestionBankDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [questionBank, setQuestionBank] = useState<{
-    id: string;
-    name: string;
-    description: string;
-  } | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const { currentUser } = useAuth();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  
+  // Get question bank details
+  const {
+    document: questionBank,
+    loading: bankLoading,
+    error: bankError,
+  } = useFirestoreDocument<QuestionBank>("questionBanks", id);
 
-  // Mock data for demonstration
+  // Get questions for this bank
+  const {
+    documents: questions,
+    loading: questionsLoading,
+    error: questionsError,
+  } = useFirestoreCollection<Question>(
+    "questions",
+    id ? [where("questionBankId", "==", id)] : [],
+  );
+  
   useEffect(() => {
-    // In a real app, this would fetch from Firebase
-    setQuestionBank({
-      id: id || "default-id",
-      name: "Mathematics Question Bank",
-      description: "Collection of mathematics questions for high school exams",
-    });
+    if (bankError) {
+      toast({
+        title: "Error",
+        description: "Failed to load question bank details.",
+        variant: "destructive",
+      });
+    }
 
-    setQuestions([
-      {
-        id: "1",
-        text: "What is the value of π (pi) to two decimal places?",
-        type: "Multiple Choice",
-        score: 5,
-        options: {
-          A: "3.10",
-          B: "3.14",
-          C: "3.16",
-          D: "3.18",
-          E: "3.20",
-        },
-        correctAnswer: "B",
-        explanation: "The value of π (pi) to two decimal places is 3.14.",
-      },
-      {
-        id: "2",
-        text: "Solve for x: 2x + 5 = 15",
-        type: "Multiple Choice",
-        score: 3,
-        options: {
-          A: "x = 3",
-          B: "x = 4",
-          C: "x = 5",
-          D: "x = 6",
-          E: "x = 7",
-        },
-        correctAnswer: "C",
-        explanation:
-          "To solve for x: 2x + 5 = 15, subtract 5 from both sides: 2x = 10, then divide both sides by 2: x = 5.",
-      },
-      {
-        id: "3",
-        text: "What is the area of a circle with radius 4 units?",
-        type: "Multiple Choice",
-        score: 4,
-        options: {
-          A: "16π square units",
-          B: "8π square units",
-          C: "4π square units",
-          D: "64π square units",
-          E: "32π square units",
-        },
-        correctAnswer: "A",
-        explanation:
-          "The area of a circle is calculated using the formula A = πr². With r = 4, A = π(4)² = 16π square units.",
-      },
-    ]);
-  }, [id]);
+    if (questionsError) {
+      toast({
+        title: "Error",
+        description: "Failed to load questions.",
+        variant: "destructive",
+      });
+    }
+  }, [bankError, questionsError]);
+
+  // No mock data needed as we're using Firebase hooks
 
   const handleAddQuestion = () => {
     setCurrentQuestion(null);
@@ -132,39 +104,34 @@ const QuestionBankDetailPage = () => {
     setIsViewOpen(true);
   };
 
-  const handleDeleteQuestion = (questionId: string) => {
-    // In a real app, this would delete from Firebase
-    setQuestions(questions.filter((q) => q.id !== questionId));
+  const handleDeleteQuestion = async (questionId: string) => {
+    try {
+      await deleteQuestion(questionId);
+      toast({
+        title: "Success",
+        description: "Question deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting question:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete question.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleFormSubmit = (data: QuestionFormValues) => {
-    // In a real app, this would save to Firebase
-    if (isEditing && currentQuestion) {
-      // Update existing question
-      const updatedQuestions = questions.map((q) => {
-        if (q.id === currentQuestion.id) {
-          return {
-            ...q,
-            text: data.questionText,
-            options: {
-              A: data.optionA,
-              B: data.optionB,
-              C: data.optionC,
-              D: data.optionD,
-              E: data.optionE,
-            },
-            correctAnswer: data.correctAnswer,
-            explanation: data.explanation,
-            score: data.score,
-          };
-        }
-        return q;
-      });
-      setQuestions(updatedQuestions);
-    } else {
-      // Add new question
-      const newQuestion: Question = {
-        id: Date.now().toString(), // Generate a temporary ID
+  const handleFormSubmit = async (data: QuestionFormValues) => {
+    try {
+      if (!currentUser) {
+        throw new Error("You must be logged in to perform this action");
+      }
+
+      if (!id) {
+        throw new Error("Question bank ID is missing");
+      }
+
+      const questionData = {
         text: data.questionText,
         type: "Multiple Choice",
         score: data.score,
@@ -177,10 +144,34 @@ const QuestionBankDetailPage = () => {
         },
         correctAnswer: data.correctAnswer,
         explanation: data.explanation,
+        questionBankId: id,
       };
-      setQuestions([...questions, newQuestion]);
+
+      if (isEditing && currentQuestion) {
+        // Update existing question
+        await updateQuestion(currentQuestion.id as string, questionData);
+        toast({
+          title: "Success",
+          description: "Question updated successfully.",
+        });
+      } else {
+        // Add new question
+        await createQuestion(questionData, currentUser.uid);
+        toast({
+          title: "Success",
+          description: "Question added successfully.",
+        });
+      }
+
+      setIsFormOpen(false);
+    } catch (error) {
+      console.error("Error saving question:", error);
+      toast({
+        title: "Error",
+        description: `Failed to ${isEditing ? "update" : "add"} question.`,
+        variant: "destructive",
+      });
     }
-    setIsFormOpen(false);
   };
 
   const mapQuestionToFormValues = (question: Question): QuestionFormValues => {
@@ -196,6 +187,31 @@ const QuestionBankDetailPage = () => {
       score: question.score,
     };
   };
+
+  if (bankLoading || questionsLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">Loading...</div>
+    );
+  }
+
+  if (!questionBank) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          Question bank not found. It may have been deleted or you don't have
+          permission to view it.
+        </div>
+        <Button
+          variant="ghost"
+          onClick={() => navigate("/admin/question-banks")}
+          className="mt-4"
+        >
+          <ArrowLeft className="h-5 w-5 mr-2" />
+          Back to Question Banks
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8 px-4 bg-gray-50 min-h-screen">
@@ -213,12 +229,10 @@ const QuestionBankDetailPage = () => {
       <div className="bg-white rounded-lg shadow-md p-6 mb-8">
         <div className="flex items-center mb-4">
           <Database className="h-6 w-6 mr-2 text-blue-500" />
-          <h1 className="text-2xl font-bold">
-            {questionBank?.name || "Question Bank"}
-          </h1>
+          <h1 className="text-2xl font-bold">{questionBank.name}</h1>
         </div>
         <p className="text-gray-600">
-          {questionBank?.description || "No description available"}
+          {questionBank.description || "No description available"}
         </p>
       </div>
 
