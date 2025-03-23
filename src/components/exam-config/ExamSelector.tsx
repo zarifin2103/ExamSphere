@@ -96,7 +96,7 @@ const ExamSelector = ({
                 <CommandItem
                   key={exam.id}
                   value={exam.id}
-                  onSelect={handleSelect}
+                  onSelect={(value) => handleSelect(value)}
                 >
                   <Check
                     className={cn(

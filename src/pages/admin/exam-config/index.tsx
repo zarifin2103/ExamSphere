@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Cog, PlusCircle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Cog, PlusCircle, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -8,159 +8,381 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import ExamSelector from "@/components/exam-config/ExamSelector";
-import LinkedQuestionBanks from "@/components/exam-config/LinkedQuestionBanks";
-import LinkQuestionBankForm from "@/components/exam-config/LinkQuestionBankForm";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+} from "@/components/ui/dialog";
+import { toast } from "@/components/ui/use-toast";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFirestoreCollection } from "@/hooks/useFirestoreCollection";
+import { getAllExams, Exam } from "@/lib/firebase/exams";
+import { getAllQuestionBanks, QuestionBank } from "@/lib/firebase/questionBanks";
+import {
+  getExamConfigByExamId,
+  addQuestionBankToExam,
+  removeQuestionBankFromExam,
+  updateQuestionBankScoringRule,
+  ExamConfig,
+  ExamQuestionBank,
+  ScoringRule,
+} from "@/lib/firebase/examConfig";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
-interface QuestionBank {
-  id: string;
-  name: string;
-  questionCount: number;
-  scoringRule: string;
+interface ExamConfigTableRow {
+  exam: Exam;
+  questionBank: QuestionBank | null;
+  scoringRule: ScoringRule | null;
+  isConfigured: boolean;
 }
 
 const ExamConfigPage = () => {
-  const [selectedExamId, setSelectedExamId] = useState<string>("");
-  const [isLinkFormOpen, setIsLinkFormOpen] = useState(false);
-  const [linkedQuestionBanks, setLinkedQuestionBanks] = useState<
-    QuestionBank[]
-  >([
-    {
-      id: "qb-1",
-      name: "Mathematics Fundamentals",
-      questionCount: 25,
-      scoringRule: "1 point per question",
-    },
-    {
-      id: "qb-2",
-      name: "Physics Principles",
-      questionCount: 15,
-      scoringRule: "2 points per question",
-    },
-    {
-      id: "qb-3",
-      name: "Chemistry Basics",
-      questionCount: 20,
-      scoringRule: "1.5 points per question",
-    },
-  ]);
+  const { currentUser } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [questionBanks, setQuestionBanks] = useState<QuestionBank[]>([]);
+  const [examConfigs, setExamConfigs] = useState<ExamConfig[]>([]);
+  const [configRows, setConfigRows] = useState<ExamConfigTableRow[]>([]);
+  const [selectedQuestionBankId, setSelectedQuestionBankId] = useState<string>("");
+  const [scoringRule, setScoringRule] = useState<ScoringRule>({
+    correctPoints: 1,
+    incorrectPoints: 0,
+    unansweredPoints: 0,
+  });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [currentExamId, setCurrentExamId] = useState<string>("");
 
-  const handleExamSelect = (examId: string) => {
-    setSelectedExamId(examId);
-    // In a real app, this would fetch the linked question banks for the selected exam
-  };
-
-  const handleRemoveQuestionBank = (id: string) => {
-    // In a real app, this would call an API to remove the link
-    setLinkedQuestionBanks(
-      linkedQuestionBanks.filter((bank) => bank.id !== id),
-    );
-  };
-
-  const handleConfigureScoring = (id: string) => {
-    // In a real app, this would open a dialog to configure scoring
-    console.log(`Configure scoring for question bank ${id}`);
-  };
-
-  const handleLinkQuestionBank = (data: any) => {
-    // In a real app, this would call an API to link the question bank
-    const newBank = {
-      id: data.questionBankId,
-      name: `Question Bank ${data.questionBankId}`,
-      questionCount: Math.floor(Math.random() * 30) + 10,
-      scoringRule: `${data.scoringRule.correctPoints} points per correct answer`,
+  // Load exams and question banks
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const examsData = await getAllExams();
+        const questionBanksData = await getAllQuestionBanks();
+        
+        setExams(examsData);
+        setQuestionBanks(questionBanksData);
+        
+        // Load exam configurations for each exam
+        const configPromises = examsData.map(exam => getExamConfigByExamId(exam.id || ""));
+        const configs = await Promise.all(configPromises);
+        const validConfigs = configs.filter(config => config !== null) as ExamConfig[];
+        setExamConfigs(validConfigs);
+        
+        // Create table rows
+        const rows: ExamConfigTableRow[] = [];
+        
+        examsData.forEach(exam => {
+          const examConfig = validConfigs.find(config => config.examId === exam.id);
+          
+          if (examConfig && examConfig.questionBanks.length > 0) {
+            // For each question bank in this exam's config
+            examConfig.questionBanks.forEach(configQB => {
+              const questionBank = questionBanksData.find(qb => qb.id === configQB.questionBankId);
+              
+              if (questionBank) {
+                rows.push({
+                  exam,
+                  questionBank,
+                  scoringRule: configQB.scoringRule,
+                  isConfigured: true
+                });
+              }
+            });
+          } else {
+            // Exam has no configured question banks
+            rows.push({
+              exam,
+              questionBank: null,
+              scoringRule: null,
+              isConfigured: false
+            });
+          }
+        });
+        
+        setConfigRows(rows);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load exam configuration data.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
     };
-    setLinkedQuestionBanks([...linkedQuestionBanks, newBank]);
-    setIsLinkFormOpen(false);
+    
+    loadData();
+  }, []);
+
+  const handleAddQuestionBank = (examId: string) => {
+    setCurrentExamId(examId);
+    setSelectedQuestionBankId("");
+    setScoringRule({
+      correctPoints: 1,
+      incorrectPoints: 0,
+      unansweredPoints: 0,
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleSaveQuestionBank = async () => {
+    if (!currentUser || !currentExamId || !selectedQuestionBankId) {
+      toast({
+        title: "Error",
+        description: "Please select a question bank.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const questionBankConfig: ExamQuestionBank = {
+        questionBankId: selectedQuestionBankId,
+        scoringRule,
+      };
+
+      await addQuestionBankToExam(
+        currentExamId,
+        questionBankConfig,
+        currentUser.uid
+      );
+
+      // Refresh data
+      const updatedConfig = await getExamConfigByExamId(currentExamId);
+      if (updatedConfig) {
+        setExamConfigs(prev => {
+          const newConfigs = prev.filter(c => c.examId !== currentExamId);
+          return [...newConfigs, updatedConfig];
+        });
+
+        // Update rows
+        const exam = exams.find(e => e.id === currentExamId);
+        const questionBank = questionBanks.find(qb => qb.id === selectedQuestionBankId);
+
+        if (exam && questionBank) {
+          setConfigRows(prev => {
+            // Remove any existing row for this exam-questionbank pair
+            const filteredRows = prev.filter(
+              row => !(row.exam.id === currentExamId && row.questionBank?.id === selectedQuestionBankId)
+            );
+            
+            // Add the new row
+            return [
+              ...filteredRows,
+              {
+                exam,
+                questionBank,
+                scoringRule,
+                isConfigured: true
+              }
+            ];
+          });
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: "Question bank linked to exam successfully.",
+      });
+
+      setIsDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving question bank:", error);
+      toast({
+        title: "Error",
+        description: "Failed to link question bank to exam.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRemoveQuestionBank = async (examId: string, questionBankId: string) => {
+    if (!currentUser) return;
+
+    setIsLoading(true);
+    try {
+      await removeQuestionBankFromExam(examId, questionBankId, currentUser.uid);
+
+      // Update local state
+      setConfigRows(prev => 
+        prev.filter(row => !(row.exam.id === examId && row.questionBank?.id === questionBankId))
+      );
+
+      // If this was the last question bank for this exam, add a row with no question bank
+      const examStillHasQuestionBanks = configRows.some(
+        row => row.exam.id === examId && row.questionBank && row.questionBank.id !== questionBankId
+      );
+
+      if (!examStillHasQuestionBanks) {
+        const exam = exams.find(e => e.id === examId);
+        if (exam) {
+          setConfigRows(prev => [
+            ...prev,
+            {
+              exam,
+              questionBank: null,
+              scoringRule: null,
+              isConfigured: false
+            }
+          ]);
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: "Question bank removed from exam successfully.",
+      });
+    } catch (error) {
+      console.error("Error removing question bank:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove question bank from exam.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="container mx-auto py-8 bg-gray-50 min-h-screen">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Exam Configuration</h1>
-          <p className="text-gray-500 mt-1">
-            Link question banks to exams and configure scoring rules
-          </p>
+    <DashboardLayout>
+      <div className="container mx-auto py-8 bg-gray-50 min-h-screen">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">Exam Configuration</h1>
+            <p className="text-gray-500 mt-1">
+              Link question banks to exams and configure scoring rules
+            </p>
+          </div>
         </div>
-        <div className="flex gap-4">
-          <Button variant="outline" className="flex items-center gap-2">
-            <Cog size={16} />
-            Settings
-          </Button>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-8">
         <Card>
           <CardHeader>
-            <CardTitle>Select Exam</CardTitle>
+            <CardTitle>Exam and Question Bank Pairings</CardTitle>
             <CardDescription>
-              Choose an exam to configure its question banks and scoring rules
+              Configure which question banks are used in each exam and set scoring rules
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ExamSelector
-              selectedExamId={selectedExamId}
-              onExamSelect={handleExamSelect}
-            />
+            {isLoading ? (
+              <div className="text-center py-8">
+                <p>Loading exam configurations...</p>
+              </div>
+            ) : configRows.length > 0 ? (
+              <Table>
+                <TableCaption>List of exam and question bank pairings</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[250px]">Exam</TableHead>
+                    <TableHead className="w-[250px]">Question Bank</TableHead>
+                    <TableHead className="w-[200px]">Scoring Rule</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {configRows.map((row, index) => (
+                    <TableRow key={`${row.exam.id}-${row.questionBank?.id || index}`}>
+                      <TableCell className="font-medium">
+                        <div>
+                          <div>{row.exam.name}</div>
+                          <div className="text-xs text-gray-500">{row.exam.institution}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {row.questionBank ? (
+                          <div>
+                            <div>{row.questionBank.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {row.questionBank.questionCount || 0} questions
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">No question bank linked</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {row.scoringRule ? (
+                          <div className="text-sm">
+                            <div>Correct: +{row.scoringRule.correctPoints} points</div>
+                            <div>Incorrect: {row.scoringRule.incorrectPoints} points</div>
+                            <div>Unanswered: {row.scoringRule.unansweredPoints} points</div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">No scoring rule</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          {row.questionBank ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveQuestionBank(row.exam.id || "", row.questionBank?.id || "")}
+                              disabled={isLoading}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleAddQuestionBank(row.exam.id || "")}
+                              disabled={isLoading}
+                              className="flex items-center gap-1"
+                            >
+                              <PlusCircle className="h-4 w-4" />
+                              Link Question Bank
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-16 bg-white rounded-lg shadow-sm">
+                <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Cog size={32} className="text-gray-400" />
+                </div>
+                <h3 className="text-xl font-medium text-gray-900 mb-2">
+                  No Exam Configurations
+                </h3>
+                <p className="text-gray-500 max-w-md mx-auto">
+                  There are no exams or question banks configured yet. Please add exams and question banks first.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {selectedExamId && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Question Banks</CardTitle>
-                <CardDescription>
-                  Manage question banks linked to this exam
-                </CardDescription>
-              </div>
-              <Dialog open={isLinkFormOpen} onOpenChange={setIsLinkFormOpen}>
-                <DialogTrigger asChild>
-                  <Button className="flex items-center gap-2">
-                    <PlusCircle size={16} />
-                    Link Question Bank
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[800px]">
-                  <LinkQuestionBankForm
-                    examId={selectedExamId}
-                    onSubmit={handleLinkQuestionBank}
-                    onCancel={() => setIsLinkFormOpen(false)}
-                  />
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              <LinkedQuestionBanks
-                examId={selectedExamId}
-                questionBanks={linkedQuestionBanks}
-                onRemove={handleRemoveQuestionBank}
-                onConfigureScoring={handleConfigureScoring}
-              />
-            </CardContent>
-          </Card>
-        )}
-
-        {!selectedExamId && (
-          <div className="text-center py-16 bg-white rounded-lg shadow-sm">
-            <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <Cog size={32} className="text-gray-400" />
-            </div>
-            <h3 className="text-xl font-medium text-gray-900 mb-2">
-              No Exam Selected
-            </h3>
-            <p className="text-gray-500 max-w-md mx-auto">
-              Please select an exam from the dropdown above to configure its
-              question banks and scoring rules.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default ExamConfigPage;
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Link Question Bank to Exam</DialogTitle>
