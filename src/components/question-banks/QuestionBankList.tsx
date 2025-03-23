@@ -33,11 +33,11 @@ import { Input } from "@/components/ui/input";
 import { Search, Plus, Edit, Trash2, Eye } from "lucide-react";
 
 interface QuestionBank {
-  id: string;
+  id?: string;
   name: string;
   description: string;
-  questionCount: number;
-  createdAt: string;
+  questionCount?: number;
+  createdAt?: any;
 }
 
 interface QuestionBankListProps {

@@ -19,21 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { PlusCircle, Pencil, Trash2, Eye } from "lucide-react";
-
-interface Supervisor {
-  id: string;
-  name: string;
-}
-
-interface Exam {
-  id: string;
-  name: string;
-  institution: string;
-  address: string;
-  materials: string[];
-  supervisors: Supervisor[];
-  notes?: string;
-}
+import { Exam, Supervisor } from "@/lib/firebase/exams";
 
 interface ExamListProps {
   exams?: Exam[];
@@ -92,7 +78,7 @@ const ExamList: React.FC<ExamListProps> = ({
   };
 
   const confirmDelete = () => {
-    if (examToDelete) {
+    if (examToDelete && examToDelete.id) {
       onDeleteExam(examToDelete.id);
       setDeleteDialogOpen(false);
       setExamToDelete(null);
@@ -122,7 +108,7 @@ const ExamList: React.FC<ExamListProps> = ({
         </TableHeader>
         <TableBody>
           {exams.map((exam) => (
-            <TableRow key={exam.id}>
+            <TableRow key={exam.id || `temp-${Math.random()}`}>
               <TableCell className="font-medium">{exam.name}</TableCell>
               <TableCell>
                 <div>
@@ -157,16 +143,18 @@ const ExamList: React.FC<ExamListProps> = ({
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => onViewExam(exam.id)}
+                    onClick={() => exam.id && onViewExam(exam.id)}
                     title="View Exam"
+                    disabled={!exam.id}
                   >
                     <Eye className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => onEditExam(exam.id)}
+                    onClick={() => exam.id && onEditExam(exam.id)}
                     title="Edit Exam"
+                    disabled={!exam.id}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>

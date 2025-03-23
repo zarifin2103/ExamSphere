@@ -1,49 +1,44 @@
- } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import QuestionBankList from "@/components/question-banks/QuestionBankList";
 import QuestionBankForm from "@/components/question-banks/QuestionBankForm";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFirestoreCollection } from "@/hooks/useFirestoreCollection";
+import {
+  createQuestionBank,
+  updateQuestionBank,
+  deleteQuestionBank,
+  QuestionBank as QuestionBankType
+} from "@/lib/firebase/questionBanks";
 
-interface QuestionBank {
-  id: string;
-  name: string;
-  description: string;
-  questionCount: number;
-  createdAt: string;
-}
+// Using the QuestionBank type from firebase/questionBanks.ts
 
 const QuestionBanksPage = () => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentQuestionBank, setCurrentQuestionBank] =
-    useState<QuestionBank | null>(null);
-
-  // Mock data - in a real app, this would come from Firebase
-  const [questionBanks, setQuestionBanks] = useState<QuestionBank[]>([
-    {
-      id: "1",
-      name: "Mathematics Grade 10",
-      description: "Basic algebra and geometry questions for 10th grade",
-      questionCount: 25,
-      createdAt: "2023-05-15",
-    },
-    {
-      id: "2",
-      name: "English Literature",
-      description: "Questions about classic novels and poetry",
-      questionCount: 30,
-      createdAt: "2023-06-20",
-    },
-    {
-      id: "3",
-      name: "Computer Science Fundamentals",
-      description: "Basic programming concepts and algorithms",
-      questionCount: 40,
-      createdAt: "2023-07-10",
-    },
-  ]);
+    useState<QuestionBankType | null>(null);
+    
+  // Use our custom hook to get real-time updates from Firestore
+  const {
+    documents: questionBanks,
+    loading,
+    error,
+  } = useFirestoreCollection<QuestionBankType>("questionBanks");
+  
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load question banks. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [error]);
 
   const handleAddQuestionBank = () => {
     setCurrentQuestionBank(null);
@@ -58,13 +53,21 @@ const QuestionBanksPage = () => {
     }
   };
 
-  const handleDeleteQuestionBank = (id: string) => {
-    // In a real app, this would delete from Firebase
-    setQuestionBanks(questionBanks.filter((bank) => bank.id !== id));
-    toast({
-      title: "Success",
-      description: "Question bank deleted successfully.",
-    });
+  const handleDeleteQuestionBank = async (id: string) => {
+    try {
+      await deleteQuestionBank(id);
+      toast({
+        title: "Success",
+        description: "Question bank deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting question bank:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete question bank.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleViewQuestions = (id: string) => {
@@ -72,29 +75,56 @@ const QuestionBanksPage = () => {
     navigate(`/admin/question-banks/${id}`);
   };
 
-  const handleFormSubmit = (data: { name: string; description?: string }) => {
-    if (currentQuestionBank) {
-      // Update existing question bank
-      setQuestionBanks(
-        questionBanks.map((bank) =>
-          bank.id === currentQuestionBank.id
-            ? { ...bank, name: data.name, description: data.description || "" }
-            : bank,
-        ),
-      );
-    } else {
-      // Create new question bank
-      const newQuestionBank: QuestionBank = {
-        id: `${Date.now()}`, // In a real app, this would be a Firebase ID
-        name: data.name,
-        description: data.description || "",
-        questionCount: 0,
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      setQuestionBanks([...questionBanks, newQuestionBank]);
+  const handleFormSubmit = async (data: { name: string; description?: string }) => {
+    try {
+      if (!currentUser) {
+        throw new Error("You must be logged in to perform this action");
+      }
+
+      if (currentQuestionBank) {
+        // Update existing question bank
+        await updateQuestionBank(currentQuestionBank.id as string, {
+          name: data.name,
+          description: data.description || "",
+        });
+        toast({
+          title: "Success",
+          description: "Question bank updated successfully.",
+        });
+      } else {
+        // Create new question bank
+        await createQuestionBank(
+          {
+            name: data.name,
+            description: data.description || "",
+          },
+          currentUser.uid,
+        );
+        toast({
+          title: "Success",
+          description: "Question bank created successfully.",
+        });
+      }
+      setIsFormOpen(false);
+    } catch (error) {
+      console.error("Error saving question bank:", error);
+      toast({
+        title: "Error",
+        description: `Failed to ${currentQuestionBank ? "update" : "create"} question bank.`,
+        variant: "destructive",
+      });
     }
-    setIsFormOpen(false);
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="container mx-auto flex justify-center items-center h-64">
+          Loading question banks...
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

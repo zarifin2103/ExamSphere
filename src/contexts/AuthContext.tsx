@@ -13,12 +13,16 @@ interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
+  checkUserRole: () => Promise<string | null>;
+  user: User | null; // Add user property for backward compatibility
 }
 
 const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   userProfile: null,
   loading: true,
+  checkUserRole: async () => null,
+  user: null, // Add user property for backward compatibility
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -51,10 +55,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     return unsubscribe;
   }, []);
 
+  // Function to check user role from Firestore
+  const checkUserRole = async (): Promise<string | null> => {
+    if (!currentUser) return null;
+    
+    try {
+      const profile = await getCurrentUserProfile();
+      return profile?.role || null;
+    } catch (error) {
+      console.error("Error checking user role:", error);
+      return null;
+    }
+  };
+
   const value = {
     currentUser,
     userProfile,
     loading,
+    checkUserRole,
+    user: currentUser, // Add user property for backward compatibility
   };
 
   return (

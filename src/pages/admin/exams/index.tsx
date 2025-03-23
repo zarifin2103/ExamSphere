@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import ExamList from "@/components/exams/ExamList";
@@ -6,63 +6,33 @@ import ExamForm from "@/components/exams/ExamForm";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-
-interface Supervisor {
-  id: string;
-  name: string;
-}
-
-interface Exam {
-  id: string;
-  name: string;
-  institution: string;
-  address: string;
-  materials: string[];
-  supervisors: Supervisor[];
-  notes?: string;
-}
+import { useAuth } from "@/contexts/AuthContext";
+import { createExam, updateExam, deleteExam, getAllExams, Exam, Supervisor } from "@/lib/firebase/exams";
 
 const ExamsPage = () => {
   const navigate = useNavigate();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentExam, setCurrentExam] = useState<Exam | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Mock exams data
-  const [exams, setExams] = useState<Exam[]>([
-    {
-      id: "1",
-      name: "Mathematics Final Exam",
-      institution: "Springfield High School",
-      address: "123 Education St, Springfield",
-      materials: ["Calculator", "Ruler", "Graph paper"],
-      supervisors: [
-        { id: "s1", name: "John Smith" },
-        { id: "s2", name: "Jane Doe" },
-      ],
-      notes: "Standard 2-hour exam format",
-    },
-    {
-      id: "2",
-      name: "Science Midterm",
-      institution: "Riverside Academy",
-      address: "456 Learning Ave, Riverside",
-      materials: ["Periodic Table", "Calculator"],
-      supervisors: [{ id: "s3", name: "Robert Johnson" }],
-    },
-    {
-      id: "3",
-      name: "English Literature Assessment",
-      institution: "Central University",
-      address: "789 Knowledge Blvd, Central City",
-      materials: ["Dictionary"],
-      supervisors: [
-        { id: "s4", name: "Emily Wilson" },
-        { id: "s5", name: "Michael Brown" },
-      ],
-      notes: "Open book examination",
-    },
-  ]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const { user } = useAuth();
+  
+  // Load exams from Firestore
+  useEffect(() => {
+    const loadExams = async () => {
+      try {
+        setIsLoading(true);
+        const examsData = await getAllExams();
+        setExams(examsData);
+      } catch (error) {
+        console.error("Error loading exams:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadExams();
+  }, []);
 
   const handleCreateExam = () => {
     setCurrentExam(null);
@@ -86,9 +56,18 @@ const ExamsPage = () => {
     }
   };
 
-  const handleDeleteExam = (examId: string) => {
-    // In a real app, this would call an API to delete the exam
-    setExams(exams.filter((exam) => exam.id !== examId));
+  const handleDeleteExam = async (examId: string) => {
+    try {
+      setIsLoading(true);
+      // Delete exam from Firestore
+      await deleteExam(examId);
+      // Update local state
+      setExams(exams.filter((exam) => exam.id !== examId));
+    } catch (error) {
+      console.error("Error deleting exam:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleViewExam = (examId: string) => {
@@ -97,54 +76,60 @@ const ExamsPage = () => {
     console.log(`Viewing exam ${examId}`);
   };
 
-  const handleFormSubmit = (data: any) => {
+  const handleFormSubmit = async (data: any) => {
+    if (!user) {
+      console.error("User not authenticated");
+      return;
+    }
+    
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      if (currentExam) {
-        // Update existing exam
+    try {
+      // Convert supervisors from string array to Supervisor objects
+      const supervisorsData = data.supervisors.map((name: string, index: number) => ({
+        id: `s${Date.now()}-${index}`,
+        name,
+      }));
+      
+      const examData = {
+        name: data.name,
+        institution: data.institution,
+        address: data.address,
+        materials: data.materials,
+        supervisors: supervisorsData,
+        notes: data.notes,
+      };
+      
+      if (currentExam && currentExam.id) {
+        // Update existing exam in Firestore
+        await updateExam(currentExam.id, examData);
+        
+        // Update local state
         setExams(
           exams.map((exam) => {
             if (exam.id === currentExam.id) {
               return {
                 ...exam,
-                name: data.name,
-                institution: data.institution,
-                address: data.address,
-                materials: data.materials,
-                supervisors: data.supervisors.map(
-                  (name: string, index: number) => ({
-                    id: `s${index + 1}`,
-                    name,
-                  }),
-                ),
-                notes: data.notes,
+                ...examData,
               };
             }
             return exam;
-          }),
+          })
         );
       } else {
-        // Create new exam
-        const newExam: Exam = {
-          id: `${exams.length + 1}`,
-          name: data.name,
-          institution: data.institution,
-          address: data.address,
-          materials: data.materials,
-          supervisors: data.supervisors.map((name: string, index: number) => ({
-            id: `s${Date.now()}-${index}`,
-            name,
-          })),
-          notes: data.notes,
-        };
+        // Create new exam in Firestore
+        const newExam = await createExam(examData, user.uid);
+        
+        // Update local state
         setExams([...exams, newExam]);
       }
-
-      setIsLoading(false);
+      
       setIsFormOpen(false);
-    }, 1000);
+    } catch (error) {
+      console.error("Error saving exam:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

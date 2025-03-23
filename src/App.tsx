@@ -12,6 +12,7 @@ const QuestionBankDetailPage = lazy(
   () => import("./pages/admin/question-banks/[id]"),
 );
 const ExamConfigPage = lazy(() => import("./pages/admin/exam-config"));
+const SupervisorDashboard = lazy(() => import("./pages/supervisor/dashboard"));
 const ParticipantDashboard = lazy(
   () => import("./pages/participant/dashboard"),
 );
@@ -71,6 +72,16 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <ExamConfigPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Supervisor Routes */}
+          <Route
+            path="/supervisor/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["supervisor"]}>
+                <SupervisorDashboard />
               </ProtectedRoute>
             }
           />

@@ -29,19 +29,30 @@ const Home = () => {
 
   // If user is already logged in, redirect to appropriate dashboard
   React.useEffect(() => {
-    if (currentUser && userProfile) {
-      switch (userProfile.role) {
-        case "admin":
-          navigate("/admin/dashboard");
-          break;
-        case "supervisor":
-          navigate("/supervisor/dashboard");
-          break;
-        case "participant":
-          navigate("/participant/dashboard");
-          break;
+    const redirectLoggedInUser = async () => {
+      if (currentUser) {
+        if (userProfile) {
+          // If userProfile is already loaded, use its role
+          switch (userProfile.role) {
+            case "admin":
+              navigate("/admin/dashboard");
+              break;
+            case "supervisor":
+            case "pengawas": // Handle both 'supervisor' and 'pengawas' roles
+              navigate("/supervisor/dashboard");
+              break;
+            case "participant":
+              navigate("/participant/dashboard");
+              break;
+            default:
+              navigate("/participant/dashboard"); // Default fallback
+              break;
+          }
+        }
       }
-    }
+    };
+    
+    redirectLoggedInUser();
   }, [currentUser, userProfile, navigate]);
 
   return (

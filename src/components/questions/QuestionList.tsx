@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 
 interface Question {
-  id: string;
+  id?: string;
   text: string;
   type: string;
   score: number;
@@ -34,6 +34,7 @@ interface Question {
   };
   correctAnswer: "A" | "B" | "C" | "D" | "E";
   explanation: string;
+  questionBankId?: string;
 }
 
 interface QuestionListProps {

@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: ("admin" | "supervisor" | "participant" | "user")[];
+  allowedRoles?: ("admin" | "supervisor" | "pengawas" | "participant" | "user")[];
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
@@ -35,6 +35,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         case "admin":
           return <Navigate to="/admin/dashboard" replace />;
         case "supervisor":
+        case "pengawas": // Handle both 'supervisor' and 'pengawas' roles
           return <Navigate to="/supervisor/dashboard" replace />;
         case "participant":
           return <Navigate to="/participant/dashboard" replace />;

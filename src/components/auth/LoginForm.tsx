@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -46,6 +47,7 @@ const LoginForm = ({ onSuccess = () => {} }: LoginFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { checkUserRole } = useAuth();
 
   const {
     register,
@@ -71,18 +73,40 @@ const LoginForm = ({ onSuccess = () => {} }: LoginFormProps) => {
     try {
       // Use the Firebase login function from our lib
       await loginUser(data.email, data.password);
-
-      // Navigate based on role
-      switch (data.role) {
-        case "admin":
-          navigate("/admin/dashboard");
-          break;
-        case "supervisor":
-          navigate("/supervisor/dashboard");
-          break;
-        case "participant":
-          navigate("/participant/dashboard");
-          break;
+      
+      // Check user role from Firestore
+      const userRole = await checkUserRole();
+      
+      if (userRole) {
+        // Navigate based on role from Firestore
+        switch (userRole) {
+          case "admin":
+            navigate("/admin/dashboard");
+            break;
+          case "supervisor":
+          case "pengawas": // Handle both 'supervisor' and 'pengawas' roles
+            navigate("/supervisor/dashboard");
+            break;
+          case "participant":
+            navigate("/participant/dashboard");
+            break;
+          default:
+            navigate("/participant/dashboard"); // Default to participant dashboard
+            break;
+        }
+      } else {
+        // Fallback to role selected in form if Firestore role not found
+        switch (data.role) {
+          case "admin":
+            navigate("/admin/dashboard");
+            break;
+          case "supervisor":
+            navigate("/supervisor/dashboard");
+            break;
+          case "participant":
+            navigate("/participant/dashboard");
+            break;
+        }
       }
 
       onSuccess();

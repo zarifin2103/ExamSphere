@@ -27,7 +27,7 @@ export interface UserProfile {
   uid: string;
   email: string;
   displayName?: string;
-  role: "admin" | "supervisor" | "participant" | "user";
+  role: "admin" | "supervisor" | "pengawas" | "participant" | "user";
   institution?: string;
   createdAt?: any;
   updatedAt?: any;
@@ -38,7 +38,7 @@ export const registerUser = async (
   email: string,
   password: string,
   displayName: string,
-  role: "admin" | "supervisor" | "participant" | "user",
+  role: "admin" | "supervisor" | "pengawas" | "participant" | "user",
   institution?: string,
 ): Promise<UserProfile> => {
   try {
@@ -149,7 +149,7 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
 
 // Get users by role
 export const getUsersByRole = async (
-  role: "admin" | "supervisor" | "participant",
+  role: "admin" | "supervisor" | "pengawas" | "participant",
 ): Promise<UserProfile[]> => {
   try {
     const q = query(collection(db, COLLECTION_NAME), where("role", "==", role));
