@@ -10,22 +10,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { toast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFirestoreDocument } from "@/hooks/useFirestoreDocument";
+import { useFirestoreCollection } from "@/hooks/useFirestoreCollection";
+import { where } from "firebase/firestore";
+import {
+  getQuestionBankById,
+  QuestionBank,
+} from "@/lib/firebase/questionBanks";
+import {
+  createQuestion,
+  updateQuestion,
+  deleteQuestion,
+  Question,
+} from "@/lib/firebase/questions";
 
-interface Question {
-  id: string;
-  text: string;
-  type: string;
-  score: number;
-  options: {
-    A: string;
-    B: string;
-    C: string;
-    D: string;
-    E: string;
-  };
-  correctAnswer: "A" | "B" | "C" | "D" | "E";
-  explanation: string;
-}
+
+// Using the Question type from firebase/questions.ts
 
 interface QuestionFormValues {
   questionText: string;
