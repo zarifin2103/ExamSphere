@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read and write their own profile
+    match /users/{userId} {
+      // Allow read if the user is authenticated and the document ID matches their user ID
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow create if the user is authenticated and creating their own document
+      // This is needed for the signup process
+      allow create: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow update if the user is authenticated and updating their own document
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Admin rules - allow admins to read and write all collections
+    match /{document=**} {
+      allow read, write: if request.auth != null && 
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Exam rules
+    match /exams/{examId} {
+      // Allow supervisors to read exams
+      allow read: if request.auth != null && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'supervisor';
+      
+      // Allow participants to read exams
+      allow read: if request.auth != null && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['participant', 'user'];
+    }
+    
+    // Question bank rules
+    match /questionBanks/{bankId} {
+      // Allow supervisors to read question banks
+      allow read: if request.auth != null && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'supervisor';
+    }
+    
+    // Exam results rules
+    match /examResults/{resultId} {
+      // Allow participants to read their own results
+      allow read: if request.auth != null && 
+                   resource.data.userId == request.auth.uid;
+      
+      // Allow participants to create their own results
+      allow create: if request.auth != null && 
+                     request.resource.data.userId == request.auth.uid;
+    }
+  }
+}
