@@ -386,3 +386,113 @@ const ExamConfigPage = () => {
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Link Question Bank to Exam</DialogTitle>
+              <DialogDescription>
+                Select a question bank to link to this exam and configure scoring rules.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="questionBank" className="text-right text-sm font-medium">
+                  Question Bank
+                </label>
+                <Select
+                  value={selectedQuestionBankId}
+                  onValueChange={setSelectedQuestionBankId}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select a question bank" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {questionBanks.map((qb) => (
+                      <SelectItem key={qb.id} value={qb.id || ""}>
+                        {qb.name} ({qb.questionCount || 0} questions)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="correctPoints" className="text-right text-sm font-medium">
+                  Correct Answer
+                </label>
+                <div className="col-span-3 flex items-center gap-2">
+                  <Input
+                    id="correctPoints"
+                    type="number"
+                    value={scoringRule.correctPoints}
+                    onChange={(e) =>
+                      setScoringRule({
+                        ...scoringRule,
+                        correctPoints: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-20"
+                  />
+                  <span>points</span>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="incorrectPoints" className="text-right text-sm font-medium">
+                  Incorrect Answer
+                </label>
+                <div className="col-span-3 flex items-center gap-2">
+                  <Input
+                    id="incorrectPoints"
+                    type="number"
+                    value={scoringRule.incorrectPoints}
+                    onChange={(e) =>
+                      setScoringRule({
+                        ...scoringRule,
+                        incorrectPoints: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-20"
+                  />
+                  <span>points</span>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="unansweredPoints" className="text-right text-sm font-medium">
+                  Unanswered
+                </label>
+                <div className="col-span-3 flex items-center gap-2">
+                  <Input
+                    id="unansweredPoints"
+                    type="number"
+                    value={scoringRule.unansweredPoints}
+                    onChange={(e) =>
+                      setScoringRule({
+                        ...scoringRule,
+                        unansweredPoints: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-20"
+                  />
+                  <span>points</span>
+                </div>
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button 
+                type="submit" 
+                onClick={handleSaveQuestionBank}
+                disabled={isLoading || !selectedQuestionBankId}
+                className="flex items-center gap-1"
+              >
+                <Save className="h-4 w-4" />
+                Save Configuration
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+export default ExamConfigPage;
